@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.commands">
+      <category
+            name="PNPE Category"
+            id="yoshikihigo.pnpe.ui.commands.category">
+      </category>
+      <command
+            name="Build Database"
+            categoryId="yoshikihigo.pnpe.ui.commands.category"
+            id="yoshikihigo.pnpe.ui.commands.buildDB">
+      </command>
+   </extension>
+   <extension
+         point="org.eclipse.ui.handlers">
+      <handler
+            commandId="yoshikihigo.pnpe.ui.commands.buildDB"
+            class="yoshikihigo.pnpe.ui.handlers.PNPEHandler">
+      </handler>
+   </extension>
+   <extension
+         point="org.eclipse.ui.bindings">
+      <key
+            commandId="yoshikihigo.pnpe.ui.commands.buildDB"
+            contextId="org.eclipse.ui.contexts.window"
+            sequence="M1+6"
+            schemeId="org.eclipse.ui.defaultAcceleratorConfiguration">
+      </key>
+   </extension>
+   <extension
+         point="org.eclipse.ui.menus">
+      <menuContribution
+            locationURI="menu:org.eclipse.ui.main.menu?after=additions">
+         <menu
+               label="PNPE"
+               mnemonic="M"
+               id="yoshikihigo.pnpe.ui.menus.pnpeMenu">
+            <command
+                  commandId="yoshikihigo.pnpe.ui.commands.buildDB"
+                  mnemonic="S"
+                  id="yoshikihigo.pnpe.ui.menus.buildDB">
+            </command>
+         </menu>
+      </menuContribution>
+      <menuContribution
+            locationURI="toolbar:org.eclipse.ui.main.toolbar?after=additions">
+         <toolbar
+               id="yoshikihigo.pnpe.ui.toolbars.pnpeToolbar">
+            <command
+                  commandId="yoshikihigo.pnpe.ui.commands.buildDB"
+                  icon="icons/sample.gif"
+                  tooltip="Say hello world"
+                  id="yoshikihigo.pnpe.ui.toolbars.buildDB">
+            </command>
+         </toolbar>
+      </menuContribution>
+   </extension>
+   
+      <extension
+         point="org.eclipse.ui.views">
+      <category
+            name="PNPE Category"
+            id="yoshikihigo.pnpe.ui">
+      </category>
+      <view
+            name="PNPE View"
+            icon="icons/sample.gif"
+            category="yoshikihigo.pnpe.ui"
+            class="yoshikihigo.pnpe.ui.views.PNPEView"
+            id="yoshikihigo.pnpe.ui.views.PNPEView">
+      </view>
+   </extension>
+   
+   <runtime>
+      <library name="lib/sqlite-jdbc-3.8.6/sqlite-jdbc-3.8.6.jar" />
+   </runtime>
+
+</plugin>
