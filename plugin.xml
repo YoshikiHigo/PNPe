@@ -66,7 +66,7 @@
             id="yoshikihigo.pnpe.ui">
       </category>
       <view
-            name="PNPE View"
+            name="PNPE"
             icon="icons/sample.gif"
             category="yoshikihigo.pnpe.ui"
             class="yoshikihigo.pnpe.ui.views.PNPEView"

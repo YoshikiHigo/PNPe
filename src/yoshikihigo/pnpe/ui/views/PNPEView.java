@@ -1,5 +1,6 @@
 package yoshikihigo.pnpe.ui.views;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -85,6 +86,10 @@ public class PNPEView extends ViewPart {
 			public void run() {
 				if (null != text) {
 
+					if (text.isDisposed()) {
+						return;
+					}
+
 					text.getDisplay().asyncExec(new Runnable() {
 						@Override
 						public void run() {
@@ -117,6 +122,10 @@ public class PNPEView extends ViewPart {
 						} catch (CoreException e) {
 							e.printStackTrace();
 						}
+					}
+
+					if (text.isDisposed()) {
+						return;
 					}
 
 					text.getDisplay().asyncExec(new Runnable() {
@@ -197,51 +206,67 @@ public class PNPEView extends ViewPart {
 							}
 						}
 					}
-					
+
+					if (text.isDisposed()) {
+						return;
+					}
+
+					text.getDisplay().asyncExec(new Runnable() {
+						@Override
+						public void run() {
+							text.append("STEP3: registering the dependencies to SQL database ...");
+							text.append(System.getProperty("line.separator"));
+						}
+					});
+
 					final ConcurrentMap<Integer, List<Frequency>> frequenciesForControlDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
 					final ConcurrentMap<Integer, List<Frequency>> frequenciesForDataDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
 					final ConcurrentMap<Integer, List<Frequency>> frequenciesForExecutionDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
-					calculateFrequencies(fromNodeFrequencies, toNodeControlFrequencies,
-							texts, frequenciesForControlDependence);
-					calculateFrequencies(fromNodeFrequencies, toNodeDataFrequencies,
-							texts, frequenciesForDataDependence);
+					calculateFrequencies(fromNodeFrequencies,
+							toNodeControlFrequencies, texts,
+							frequenciesForControlDependence);
+					calculateFrequencies(fromNodeFrequencies,
+							toNodeDataFrequencies, texts,
+							frequenciesForDataDependence);
 					calculateFrequencies(fromNodeFrequencies,
 							toNodeExecutionFrequencies, texts,
 							frequenciesForExecutionDependence);
 
-					final DAO dao = new DAO("PNPE.database", true);
+					final File dbFile = new File("PNPe.database");
+					if(dbFile.exists()){
+						if(!dbFile.delete()){
+							text.getDisplay().asyncExec(new Runnable() {
+								@Override
+								public void run() {
+									text.append("Couldn't delete the old database file");								
+									text.append(System.getProperty("line.separator"));
+								}
+							});							
+						}
+					}
+					
+					final DAO dao = new DAO("PNPe.database", true);
 					registerTextsToDatabase(dao, texts);
 					registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.CONTROL,
 							frequenciesForControlDependence);
 					registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.DATA,
 							frequenciesForDataDependence);
-					registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.EXECUTION,
+					registerFrequenciesToDatabase(dao,
+							DEPENDENCE_TYPE.EXECUTION,
 							frequenciesForExecutionDependence);
 					dao.close();
-					
-					while (true) {
 
-						if (null == text || text.isDisposed()) {
-							break;
-						}
-
-						text.getDisplay().asyncExec(new Runnable() {
-							@Override
-							public void run() {
-								text.append("aaa");
-								text.append(System
-										.getProperty("line.separator"));
-							}
-						});
-
-						try {
-							Thread.sleep(1000);
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
+					if (text.isDisposed()) {
+						return;
 					}
 
-					System.out.println("bbb");
+					text.getDisplay().asyncExec(new Runnable() {
+						@Override
+						public void run() {
+							text.append("Operations were successifully finished.");
+							text.append(System.getProperty("line.separator"));
+						}
+					});
 				}
 			}
 		}.start();
@@ -360,7 +385,7 @@ public class PNPEView extends ViewPart {
 		}
 		frequency.incrementAndGet();
 	}
-	
+
 	private static void calculateFrequencies(
 			final ConcurrentMap<Integer, AtomicInteger> fromNodeAllFrequencies,
 			final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> toNodeAllFrequencies,
@@ -399,7 +424,7 @@ public class PNPEView extends ViewPart {
 			allFrequencies.put(fromNodeHash, frequencies);
 		}
 	}
-	
+
 	private static void registerTextsToDatabase(final DAO dao,
 			final ConcurrentMap<Integer, String> texts) {
 
