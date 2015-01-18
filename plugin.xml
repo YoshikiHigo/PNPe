@@ -77,5 +77,18 @@
    <runtime>
       <library name="lib/sqlite-jdbc-3.8.6/sqlite-jdbc-3.8.6.jar" />
    </runtime>
+   <extension
+         id="id1"
+         point="org.eclipse.jdt.ui.javaCompletionProposalComputer">
+      <javaCompletionProposalComputer
+            activate="true"
+            categoryId="org.eclipse.jdt.ui.defaultProposalCategory"
+            class="yoshikihigo.pnpe.ui.editor.JavaCompletionProposalComputer"
+            needsSortingAfterFiltering="false">
+         <partition
+               type="__dftl_partition_content_type">
+         </partition>
+      </javaCompletionProposalComputer>
+   </extension>
 
 </plugin>
