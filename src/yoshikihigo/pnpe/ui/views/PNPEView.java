@@ -31,6 +31,7 @@ import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.part.ViewPart;
 
+import yoshikihigo.pnpe.ui.Utility;
 import yoshikihigo.tinypdg.ast.TinyPDGASTVisitor;
 import yoshikihigo.tinypdg.cfg.node.CFGNodeFactory;
 import yoshikihigo.tinypdg.pdg.PDG;
@@ -44,7 +45,6 @@ import yoshikihigo.tinypdg.pe.MethodInfo;
 import yoshikihigo.tinypdg.prelement.data.DEPENDENCE_TYPE;
 import yoshikihigo.tinypdg.prelement.data.Frequency;
 import yoshikihigo.tinypdg.prelement.db.DAO;
-import yoshikihigo.tinypdg.scorpio.NormalizedText;
 
 /**
  * This sample class demonstrates how to plug-in a new workbench view. The view
@@ -166,7 +166,8 @@ public class PNPEView extends ViewPart {
 							for (final PDGNode<?> fromNode : nodes) {
 
 								// generate a hash value from fromNode
-								final String fromNodeNormalizedText = getNormalizedText(fromNode);
+								final String fromNodeNormalizedText = Utility
+										.getNormalizedText(fromNode);
 								final int fromNodeHash = fromNodeNormalizedText
 										.hashCode();
 
@@ -189,7 +190,8 @@ public class PNPEView extends ViewPart {
 								final SortedSet<PDGEdge> edges = fromNode
 										.getForwardEdges();
 								for (final PDGEdge edge : edges) {
-									final String toNodeNormalizedText = getNormalizedText(edge.toNode);
+									final String toNodeNormalizedText = Utility
+											.getNormalizedText(edge.toNode);
 									final int toNodeHash = toNodeNormalizedText
 											.hashCode();
 									if (edge instanceof PDGControlDependenceEdge) {
@@ -222,15 +224,15 @@ public class PNPEView extends ViewPart {
 					final ConcurrentMap<Integer, List<Frequency>> frequenciesForControlDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
 					final ConcurrentMap<Integer, List<Frequency>> frequenciesForDataDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
 					final ConcurrentMap<Integer, List<Frequency>> frequenciesForExecutionDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
-					calculateFrequencies(fromNodeFrequencies,
-							toNodeControlFrequencies, texts,
-							frequenciesForControlDependence);
-					calculateFrequencies(fromNodeFrequencies,
-							toNodeDataFrequencies, texts,
+					calculateFrequencies(DEPENDENCE_TYPE.CONTROL,
+							fromNodeFrequencies, toNodeControlFrequencies,
+							texts, frequenciesForControlDependence);
+					calculateFrequencies(DEPENDENCE_TYPE.DATA,
+							fromNodeFrequencies, toNodeDataFrequencies, texts,
 							frequenciesForDataDependence);
-					calculateFrequencies(fromNodeFrequencies,
-							toNodeExecutionFrequencies, texts,
-							frequenciesForExecutionDependence);
+					calculateFrequencies(DEPENDENCE_TYPE.EXECUTION,
+							fromNodeFrequencies, toNodeExecutionFrequencies,
+							texts, frequenciesForExecutionDependence);
 
 					final File dbFile = new File("PNPe.database");
 					if (dbFile.exists()) {
@@ -280,14 +282,6 @@ public class PNPEView extends ViewPart {
 		text.setFocus();
 	}
 
-	private static String getNormalizedText(final PDGNode<?> node) {
-		final NormalizedText fromNodeNormalizedText1 = new NormalizedText(
-				node.core);
-		final String fromNodeNormalizedText2 = NormalizedText
-				.normalize(fromNodeNormalizedText1.getText());
-		return fromNodeNormalizedText2;
-	}
-
 	private static void addToNodeHash(
 			final int fromNodeHash,
 			final int toNodeHash,
@@ -308,6 +302,7 @@ public class PNPEView extends ViewPart {
 	}
 
 	private static void calculateFrequencies(
+			final DEPENDENCE_TYPE type,
 			final ConcurrentMap<Integer, AtomicInteger> fromNodeAllFrequencies,
 			final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> toNodeAllFrequencies,
 			final ConcurrentMap<Integer, String> texts,
@@ -326,7 +321,7 @@ public class PNPEView extends ViewPart {
 				final int toNodeHash = entry2.getKey();
 				final int time = entry2.getValue().get();
 				final String normalizedText = texts.get(toNodeHash);
-				final Frequency frequency = new Frequency((float) time
+				final Frequency frequency = new Frequency(type, (float) time
 						/ (float) totalTime, time, toNodeHash, normalizedText);
 				frequencies.add(frequency);
 			}

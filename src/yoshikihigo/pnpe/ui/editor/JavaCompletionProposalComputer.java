@@ -4,15 +4,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.core.runtime.IProgressMonitor;
-import org.eclipse.jdt.core.ElementChangedEvent;
-import org.eclipse.jdt.core.IElementChangedListener;
-import org.eclipse.jdt.core.IJavaElementDelta;
-import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.ui.text.java.ContentAssistInvocationContext;
 import org.eclipse.jdt.ui.text.java.IJavaCompletionProposalComputer;
 import org.eclipse.jface.text.contentassist.CompletionProposal;
 import org.eclipse.jface.text.contentassist.ICompletionProposal;
 import org.eclipse.jface.text.contentassist.IContextInformation;
+
+import yoshikihigo.pnpe.ui.Candidate;
+import yoshikihigo.pnpe.ui.CandidateList;
 
 public class JavaCompletionProposalComputer implements
 		IJavaCompletionProposalComputer {
@@ -33,16 +32,13 @@ public class JavaCompletionProposalComputer implements
 		List<ICompletionProposal> propList = new ArrayList<ICompletionProposal>();
 		int offset = context.getInvocationOffset();
 
-		String str;
-		CompletionProposal proposal;
-
-		str = "akisute";
-		proposal = new CompletionProposal(str, offset, 10, str.length());
-		// propList.add(proposal);
-		propList.add(0, proposal);
-		str = "kashitsune";
-		proposal = new CompletionProposal(str, offset, 0, str.length());
-		propList.add(proposal);
+		final List<Candidate> candidates = CandidateList.getInstance()
+				.getCandidates();
+		for (final Candidate candidate : candidates) {
+			CompletionProposal proposal = new CompletionProposal(
+					candidate.text, offset, 0, candidate.text.length());
+			propList.add(proposal);
+		}
 
 		return propList;
 	}

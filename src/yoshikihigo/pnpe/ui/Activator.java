@@ -1,7 +1,14 @@
 package yoshikihigo.pnpe.ui;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
 
 import org.eclipse.jdt.core.ElementChangedEvent;
 import org.eclipse.jdt.core.IElementChangedListener;
@@ -24,8 +31,12 @@ import org.osgi.framework.BundleContext;
 import yoshikihigo.tinypdg.ast.TinyPDGASTVisitor;
 import yoshikihigo.tinypdg.cfg.node.CFGNodeFactory;
 import yoshikihigo.tinypdg.pdg.PDG;
+import yoshikihigo.tinypdg.pdg.edge.PDGEdge;
+import yoshikihigo.tinypdg.pdg.node.PDGNode;
 import yoshikihigo.tinypdg.pdg.node.PDGNodeFactory;
 import yoshikihigo.tinypdg.pe.MethodInfo;
+import yoshikihigo.tinypdg.prelement.data.Frequency;
+import yoshikihigo.tinypdg.prelement.db.DAO;
 
 /**
  * The activator class controls the plug-in life cycle
@@ -133,15 +144,87 @@ public class Activator extends AbstractUIPlugin {
 					}
 				}
 
+				final DAO dao = new DAO("PNPe.database", false);
+
 				if (null != targetMethod) {
-					final CFGNodeFactory cfgNodeFactory = new CFGNodeFactory();
-					final PDGNodeFactory pdgNodeFactory = new PDGNodeFactory();
-					final PDG pdg = new PDG(targetMethod, pdgNodeFactory,
-							cfgNodeFactory, true, true, false,
-							Integer.MAX_VALUE, Integer.MAX_VALUE,
-							Integer.MAX_VALUE);
-					pdg.build();
+					final PDG pdg = Activator.this.buildPDG(targetMethod);
+					final Map<Integer, List<Frequency>> totalFrequencies = new HashMap<>();
+					final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
+					for (final PDGNode<?> node : nodes) {
+						final String normalizedText = Utility
+								.getNormalizedText(node);
+						final int hash = normalizedText.hashCode();
+
+						final List<Frequency> frequencies = dao
+								.getFrequencies(hash);
+
+						final Set<Integer> toNodeHashes = new HashSet<>();
+						for (final PDGEdge edge : node.getForwardEdges()) {
+							final String toNomalizedText = Utility
+									.getNormalizedText(edge.toNode);
+							toNodeHashes.add(toNomalizedText.hashCode());
+						}
+
+						for (final Frequency frequency : frequencies) {
+							if (toNodeHashes.contains(frequency.hash)) {
+								continue;
+							}
+							List<Frequency> freqs = totalFrequencies
+									.get(frequency.hash);
+							if (null == freqs) {
+								freqs = new ArrayList<>();
+								totalFrequencies.put(frequency.hash, freqs);
+							}
+							freqs.add(frequency);
+						}
+					}
+					final List<List<Frequency>> freqList = new ArrayList<List<Frequency>>();
+					freqList.addAll(totalFrequencies.values());
+					Collections.sort(freqList,
+							new Comparator<List<Frequency>>() {
+								@Override
+								public int compare(final List<Frequency> o1,
+										final List<Frequency> o2) {
+									int support1 = 0;
+									int support2 = 0;
+									float probability1 = 0;
+									float probability2 = 0;
+									for (final Frequency f : o1) {
+										support1 += f.support;
+										probability1 += f.probablity;
+									}
+									for (final Frequency f : o2) {
+										support2 += f.support;
+										probability2 += f.probablity;
+									}
+
+									if (support1 > support2) {
+										return -1;
+									} else if (support1 < support2) {
+										return 1;
+									} else if (probability1 > probability2) {
+										return -1;
+									} else if (probability1 < probability2) {
+										return 1;
+									} else {
+										return 0;
+									}
+								}
+							});
+
+					for (final List<Frequency> freq : freqList) {
+						final Candidate c = makeCandidate(freq);
+						CandidateList.getInstance().add(c);
+					}
+
+					if (!freqList.isEmpty()) {
+
+					}
+					System.out.println("there are " + freqList.size()
+							+ " candidates.");
 				}
+
+				dao.close();
 
 				final long endTime = System.nanoTime();
 
@@ -169,5 +252,25 @@ public class Activator extends AbstractUIPlugin {
 		}
 
 		return caretPosition;
+	}
+
+	private PDG buildPDG(final MethodInfo method) {
+		final CFGNodeFactory cfgNodeFactory = new CFGNodeFactory();
+		final PDGNodeFactory pdgNodeFactory = new PDGNodeFactory();
+		final PDG pdg = new PDG(method, pdgNodeFactory, cfgNodeFactory, true,
+				true, false, Integer.MAX_VALUE, Integer.MAX_VALUE,
+				Integer.MAX_VALUE);
+		pdg.build();
+		return pdg;
+	}
+
+	private Candidate makeCandidate(final List<Frequency> frequencies) {
+		int support = 0;
+		float probability = 0;
+		for (final Frequency f : frequencies) {
+			support += f.support;
+			probability += f.probablity;
+		}
+		return new Candidate(frequencies.get(0).text, support, probability);
 	}
 }

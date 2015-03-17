@@ -20,7 +20,8 @@ public class DAO {
 	protected Connection connector;
 	private PreparedStatement insertToTexts;
 	private PreparedStatement insertToFrequencies;
-	private PreparedStatement selectFromFrequencies;
+	private PreparedStatement selectFromFrequenciesWithType;
+	private PreparedStatement selectFromFrequenciesWithoutType;
 
 	private int numberInWaitingBatchForTexts;
 	private int numberInWaitingBatchForFrequencies;
@@ -53,8 +54,10 @@ public class DAO {
 					.prepareStatement("insert into texts (hash, text) values (?, ?)");
 			this.insertToFrequencies = this.connector
 					.prepareStatement("insert into frequencies (type, fromhash, tohash, support, probability) values (?, ?, ?, ?, ?)");
-			this.selectFromFrequencies = this.connector
-					.prepareStatement("select tohash, (select text from texts T where T.hash = F.tohash), support, probability from frequencies F where (fromhash = ?) and (type = ?)");
+			this.selectFromFrequenciesWithType = this.connector
+					.prepareStatement("select tohash, (select text from texts T where T.hash = F.tohash), type, support, probability from frequencies F where (fromhash = ?) and (type = ?)");
+			this.selectFromFrequenciesWithoutType = this.connector
+					.prepareStatement("select tohash, (select text from texts T where T.hash = F.tohash), type, support, probability from frequencies F where fromhash = ?");
 
 		} catch (final SQLException e) {
 			e.printStackTrace();
@@ -111,18 +114,49 @@ public class DAO {
 		final List<Frequency> frequencies = new ArrayList<Frequency>();
 
 		try {
-			this.selectFromFrequencies.clearParameters();
-			this.selectFromFrequencies.setInt(1, fromhash);
-			this.selectFromFrequencies.setString(2, type.text);
-			final ResultSet result = this.selectFromFrequencies.executeQuery();
+			this.selectFromFrequenciesWithType.clearParameters();
+			this.selectFromFrequenciesWithType.setInt(1, fromhash);
+			this.selectFromFrequenciesWithType.setString(2, type.text);
+			final ResultSet result = this.selectFromFrequenciesWithType
+					.executeQuery();
 
 			while (result.next()) {
-				final int tohash = result.getInt(1);
-				final String toText = result.getString(2);
-				final int support = result.getInt(3);
-				final float probability = result.getFloat(4);
-				final Frequency frequency = new Frequency(probability, support,
-						tohash, toText);
+				final int tohash = result.getInt(2);
+				final String toText = result.getString(3);
+				final int support = result.getInt(4);
+				final float probability = result.getFloat(5);
+				final Frequency frequency = new Frequency(type, probability,
+						support, tohash, toText);
+				frequencies.add(frequency);
+			}
+
+		} catch (final SQLException e) {
+			e.printStackTrace();
+			System.exit(0);
+		}
+
+		return frequencies;
+	}
+
+	public List<Frequency> getFrequencies(final int fromhash) {
+
+		final List<Frequency> frequencies = new ArrayList<Frequency>();
+
+		try {
+			this.selectFromFrequenciesWithoutType.clearParameters();
+			this.selectFromFrequenciesWithoutType.setInt(1, fromhash);
+			final ResultSet result = this.selectFromFrequenciesWithoutType
+					.executeQuery();
+
+			while (result.next()) {
+				final DEPENDENCE_TYPE type = DEPENDENCE_TYPE
+						.getDEPENDENCE_TYPE(result.getString(1));
+				final int tohash = result.getInt(2);
+				final String toText = result.getString(3);
+				final int support = result.getInt(4);
+				final float probability = result.getFloat(5);
+				final Frequency frequency = new Frequency(type, probability,
+						support, tohash, toText);
 				frequencies.add(frequency);
 			}
 
