@@ -42,8 +42,8 @@ import yoshikihigo.tinypdg.pdg.edge.PDGExecutionDependenceEdge;
 import yoshikihigo.tinypdg.pdg.node.PDGNode;
 import yoshikihigo.tinypdg.pdg.node.PDGNodeFactory;
 import yoshikihigo.tinypdg.pe.MethodInfo;
+import yoshikihigo.tinypdg.prelement.data.AppearanceProbability;
 import yoshikihigo.tinypdg.prelement.data.DEPENDENCE_TYPE;
-import yoshikihigo.tinypdg.prelement.data.Frequency;
 import yoshikihigo.tinypdg.prelement.db.DAO;
 
 /**
@@ -221,9 +221,9 @@ public class PNPEView extends ViewPart {
 						}
 					});
 
-					final ConcurrentMap<Integer, List<Frequency>> frequenciesForControlDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
-					final ConcurrentMap<Integer, List<Frequency>> frequenciesForDataDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
-					final ConcurrentMap<Integer, List<Frequency>> frequenciesForExecutionDependence = new ConcurrentHashMap<Integer, List<Frequency>>();
+					final ConcurrentMap<Integer, List<AppearanceProbability>> frequenciesForControlDependence = new ConcurrentHashMap<Integer, List<AppearanceProbability>>();
+					final ConcurrentMap<Integer, List<AppearanceProbability>> frequenciesForDataDependence = new ConcurrentHashMap<Integer, List<AppearanceProbability>>();
+					final ConcurrentMap<Integer, List<AppearanceProbability>> frequenciesForExecutionDependence = new ConcurrentHashMap<Integer, List<AppearanceProbability>>();
 					calculateFrequencies(DEPENDENCE_TYPE.CONTROL,
 							fromNodeFrequencies, toNodeControlFrequencies,
 							texts, frequenciesForControlDependence);
@@ -248,7 +248,7 @@ public class PNPEView extends ViewPart {
 						}
 					}
 
-					final DAO dao = new DAO("PNPe.database", true);
+					final DAO dao = new DAO("PNPe.database");
 					registerTextsToDatabase(dao, texts);
 					registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.CONTROL,
 							frequenciesForControlDependence);
@@ -306,14 +306,14 @@ public class PNPEView extends ViewPart {
 			final ConcurrentMap<Integer, AtomicInteger> fromNodeAllFrequencies,
 			final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> toNodeAllFrequencies,
 			final ConcurrentMap<Integer, String> texts,
-			final ConcurrentMap<Integer, List<Frequency>> allFrequencies) {
+			final ConcurrentMap<Integer, List<AppearanceProbability>> allFrequencies) {
 
 		for (final Entry<Integer, ConcurrentMap<Integer, AtomicInteger>> entry : toNodeAllFrequencies
 				.entrySet()) {
 			final int fromNodeHash = entry.getKey();
 			final int totalTime = fromNodeAllFrequencies.get(fromNodeHash)
 					.get();
-			final List<Frequency> frequencies = new ArrayList<Frequency>();
+			final List<AppearanceProbability> frequencies = new ArrayList<AppearanceProbability>();
 			final ConcurrentMap<Integer, AtomicInteger> toNodeFrequencies = entry
 					.getValue();
 			for (final Entry<Integer, AtomicInteger> entry2 : toNodeFrequencies
@@ -321,22 +321,25 @@ public class PNPEView extends ViewPart {
 				final int toNodeHash = entry2.getKey();
 				final int time = entry2.getValue().get();
 				final String normalizedText = texts.get(toNodeHash);
-				final Frequency frequency = new Frequency(type, (float) time
-						/ (float) totalTime, time, toNodeHash, normalizedText);
+				final AppearanceProbability frequency = new AppearanceProbability(
+						type, (float) time / (float) totalTime, time,
+						toNodeHash, normalizedText);
 				frequencies.add(frequency);
 			}
-			Collections.sort(frequencies, new Comparator<Frequency>() {
-				@Override
-				public int compare(final Frequency f1, final Frequency f2) {
-					if (f1.probablity > f2.probablity) {
-						return -1;
-					} else if (f1.probablity < f2.probablity) {
-						return 1;
-					} else {
-						return 0;
-					}
-				}
-			});
+			Collections.sort(frequencies,
+					new Comparator<AppearanceProbability>() {
+						@Override
+						public int compare(final AppearanceProbability f1,
+								final AppearanceProbability f2) {
+							if (f1.confidence > f2.confidence) {
+								return -1;
+							} else if (f1.confidence < f2.confidence) {
+								return 1;
+							} else {
+								return 0;
+							}
+						}
+					});
 			allFrequencies.put(fromNodeHash, frequencies);
 		}
 	}
@@ -351,16 +354,17 @@ public class PNPEView extends ViewPart {
 		}
 	}
 
-	private static void registerFrequenciesToDatabase(final DAO dao,
+	private static void registerFrequenciesToDatabase(
+			final DAO dao,
 			DEPENDENCE_TYPE type,
-			final ConcurrentMap<Integer, List<Frequency>> allFrequencies) {
+			final ConcurrentMap<Integer, List<AppearanceProbability>> allFrequencies) {
 
-		for (final Entry<Integer, List<Frequency>> entry : allFrequencies
+		for (final Entry<Integer, List<AppearanceProbability>> entry : allFrequencies
 				.entrySet()) {
 
 			final int fromhash = entry.getKey();
-			for (final Frequency frequency : entry.getValue()) {
-				dao.addToFrequencies(type, fromhash, frequency);
+			for (final AppearanceProbability frequency : entry.getValue()) {
+				dao.addToProbabilities(type, fromhash, frequency);
 			}
 		}
 	}

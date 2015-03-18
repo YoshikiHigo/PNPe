@@ -35,7 +35,7 @@ import yoshikihigo.tinypdg.pdg.edge.PDGEdge;
 import yoshikihigo.tinypdg.pdg.node.PDGNode;
 import yoshikihigo.tinypdg.pdg.node.PDGNodeFactory;
 import yoshikihigo.tinypdg.pe.MethodInfo;
-import yoshikihigo.tinypdg.prelement.data.Frequency;
+import yoshikihigo.tinypdg.prelement.data.AppearanceProbability;
 import yoshikihigo.tinypdg.prelement.db.DAO;
 
 /**
@@ -144,19 +144,19 @@ public class Activator extends AbstractUIPlugin {
 					}
 				}
 
-				final DAO dao = new DAO("PNPe.database", false);
+				final DAO dao = new DAO("PNPe.database");
 
 				if (null != targetMethod) {
 					final PDG pdg = Activator.this.buildPDG(targetMethod);
-					final Map<Integer, List<Frequency>> totalFrequencies = new HashMap<>();
+					final Map<Integer, List<AppearanceProbability>> totalFrequencies = new HashMap<>();
 					final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
 					for (final PDGNode<?> node : nodes) {
 						final String normalizedText = Utility
 								.getNormalizedText(node);
 						final int hash = normalizedText.hashCode();
 
-						final List<Frequency> frequencies = dao
-								.getFrequencies(hash);
+						final List<AppearanceProbability> frequencies = dao
+								.getAppearanceFrequencies(hash);
 
 						final Set<Integer> toNodeHashes = new HashSet<>();
 						for (final PDGEdge edge : node.getForwardEdges()) {
@@ -165,11 +165,11 @@ public class Activator extends AbstractUIPlugin {
 							toNodeHashes.add(toNomalizedText.hashCode());
 						}
 
-						for (final Frequency frequency : frequencies) {
+						for (final AppearanceProbability frequency : frequencies) {
 							if (toNodeHashes.contains(frequency.hash)) {
 								continue;
 							}
-							List<Frequency> freqs = totalFrequencies
+							List<AppearanceProbability> freqs = totalFrequencies
 									.get(frequency.hash);
 							if (null == freqs) {
 								freqs = new ArrayList<>();
@@ -178,24 +178,25 @@ public class Activator extends AbstractUIPlugin {
 							freqs.add(frequency);
 						}
 					}
-					final List<List<Frequency>> freqList = new ArrayList<List<Frequency>>();
+					final List<List<AppearanceProbability>> freqList = new ArrayList<List<AppearanceProbability>>();
 					freqList.addAll(totalFrequencies.values());
 					Collections.sort(freqList,
-							new Comparator<List<Frequency>>() {
+							new Comparator<List<AppearanceProbability>>() {
 								@Override
-								public int compare(final List<Frequency> o1,
-										final List<Frequency> o2) {
+								public int compare(
+										final List<AppearanceProbability> o1,
+										final List<AppearanceProbability> o2) {
 									int support1 = 0;
 									int support2 = 0;
 									float probability1 = 0;
 									float probability2 = 0;
-									for (final Frequency f : o1) {
+									for (final AppearanceProbability f : o1) {
 										support1 += f.support;
-										probability1 += f.probablity;
+										probability1 += f.confidence;
 									}
-									for (final Frequency f : o2) {
+									for (final AppearanceProbability f : o2) {
 										support2 += f.support;
-										probability2 += f.probablity;
+										probability2 += f.confidence;
 									}
 
 									if (support1 > support2) {
@@ -212,14 +213,11 @@ public class Activator extends AbstractUIPlugin {
 								}
 							});
 
-					for (final List<Frequency> freq : freqList) {
+					for (final List<AppearanceProbability> freq : freqList) {
 						final Candidate c = makeCandidate(freq);
 						CandidateList.getInstance().add(c);
 					}
 
-					if (!freqList.isEmpty()) {
-
-					}
 					System.out.println("there are " + freqList.size()
 							+ " candidates.");
 				}
@@ -264,12 +262,13 @@ public class Activator extends AbstractUIPlugin {
 		return pdg;
 	}
 
-	private Candidate makeCandidate(final List<Frequency> frequencies) {
+	private Candidate makeCandidate(
+			final List<AppearanceProbability> frequencies) {
 		int support = 0;
 		float probability = 0;
-		for (final Frequency f : frequencies) {
+		for (final AppearanceProbability f : frequencies) {
 			support += f.support;
-			probability += f.probablity;
+			probability += f.confidence;
 		}
 		return new Candidate(frequencies.get(0).text, support, probability);
 	}
