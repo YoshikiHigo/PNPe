@@ -148,38 +148,43 @@ public class Activator extends AbstractUIPlugin {
 
 				if (null != targetMethod) {
 					final PDG pdg = Activator.this.buildPDG(targetMethod);
-					final Map<Integer, List<AppearanceProbability>> totalFrequencies = new HashMap<>();
+					final Map<Integer, List<AppearanceProbability>> allAppearanceProbabilities = new HashMap<>();
 					final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
-					for (final PDGNode<?> node : nodes) {
-						final String normalizedText = Utility
-								.getNormalizedText(node);
-						final int hash = normalizedText.hashCode();
+					for (final PDGNode<?> fromNode : nodes) {
+						final String fromNodeNormalizedText = Utility
+								.getNormalizedText(fromNode);
+						final int fromNodeHash = fromNodeNormalizedText
+								.hashCode();
 
-						final List<AppearanceProbability> frequencies = dao
-								.getAppearanceFrequencies(hash);
+						final List<AppearanceProbability> appearanceProbabilities = dao
+								.getAppearanceFrequencies(fromNodeHash);
 
 						final Set<Integer> toNodeHashes = new HashSet<>();
-						for (final PDGEdge edge : node.getForwardEdges()) {
+						for (final PDGEdge edge : fromNode.getForwardEdges()) {
+							final Map<String, String> toNodeNormalizationMap = new HashMap<>();
 							final String toNomalizedText = Utility
-									.getNormalizedText(edge.toNode);
+									.getNormalizedText(edge.toNode,
+											toNodeNormalizationMap);
 							toNodeHashes.add(toNomalizedText.hashCode());
 						}
 
-						for (final AppearanceProbability frequency : frequencies) {
-							if (toNodeHashes.contains(frequency.hash)) {
+						for (final AppearanceProbability appearanceProbability : appearanceProbabilities) {
+							if (toNodeHashes
+									.contains(appearanceProbability.hash)) {
 								continue;
 							}
-							List<AppearanceProbability> freqs = totalFrequencies
-									.get(frequency.hash);
-							if (null == freqs) {
-								freqs = new ArrayList<>();
-								totalFrequencies.put(frequency.hash, freqs);
+							List<AppearanceProbability> list = allAppearanceProbabilities
+									.get(appearanceProbability.hash);
+							if (null == list) {
+								list = new ArrayList<>();
+								allAppearanceProbabilities.put(
+										appearanceProbability.hash, list);
 							}
-							freqs.add(frequency);
+							list.add(appearanceProbability);
 						}
 					}
 					final List<List<AppearanceProbability>> freqList = new ArrayList<List<AppearanceProbability>>();
-					freqList.addAll(totalFrequencies.values());
+					freqList.addAll(allAppearanceProbabilities.values());
 					Collections.sort(freqList,
 							new Comparator<List<AppearanceProbability>>() {
 								@Override
