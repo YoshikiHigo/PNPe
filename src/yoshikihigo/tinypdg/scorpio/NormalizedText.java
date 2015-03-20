@@ -16,10 +16,15 @@ public class NormalizedText {
 
 	public static String normalize(final String text) {
 
-		// StringBuilder normalizedText = new StringBuilder(text);
-		StringBuilder normalizedText = new StringBuilder(
+		final Map<String, String> normalizationMap = new HashMap<>();
+		return normalize(text, normalizationMap);
+	}
+
+	public static String normalize(final String text,
+			final Map<String, String> normalizationMap) {
+
+		final StringBuilder normalizedText = new StringBuilder(
 				resolveDuplicatedMarkingTokens(text));
-		final Map<String, String> mapper = new HashMap<String, String>();
 
 		int startIndex = 0;
 		int endIndex = 0;
@@ -29,7 +34,7 @@ public class NormalizedText {
 				break;
 			}
 
-			endIndex = normalizedText.indexOf("$$", startIndex + 1);
+			endIndex = normalizedText.indexOf("$$", startIndex + 2);
 			final int doubleQuotationStartIndex = normalizedText.indexOf("\"",
 					startIndex);
 			final int doubleQuotationEndIndex = normalizedText.indexOf("\"",
@@ -43,12 +48,12 @@ public class NormalizedText {
 
 			assert 0 < endIndex : "invalid state.";
 
-			final String target = normalizedText.substring(startIndex,
-					endIndex + 1);
-			String value = mapper.get(target);
+			final String target = normalizedText.substring(startIndex + 2,
+					endIndex);
+			String value = normalizationMap.get(target);
 			if (null == value) {
-				value = "$" + Integer.toString(mapper.size() + 1);
-				mapper.put(target, value);
+				value = "$" + Integer.toString(normalizationMap.size() + 1);
+				normalizationMap.put(target, value);
 			}
 			normalizedText.replace(startIndex, endIndex + 2, value);
 			startIndex++;
