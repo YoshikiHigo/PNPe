@@ -148,45 +148,35 @@ public class Activator extends AbstractUIPlugin {
 				final DAO dao = new DAO("PNPe.database");
 
 				if (null != targetMethod) {
-					final PDG pdg = Activator.this.buildPDG(targetMethod);
-					final Map<Integer, List<AppearanceProbability>> allAppearanceProbabilities = new HashMap<>();
+					final PDG pdg = Activator.this.buildPDG(targetMethod);					
+					final List<List<AppearanceProbability>> allAppearanceProbabilities = new ArrayList<>();
 					final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
 					for (final PDGNode<?> fromNode : nodes) {
+
 						final String fromNodeNormalizedText = Utility
 								.getNormalizedText(fromNode);
-						final int fromNodeHash = fromNodeNormalizedText
-								.hashCode();
-
 						final List<AppearanceProbability> appearanceProbabilities = dao
-								.getAppearanceFrequencies(fromNodeHash);
+								.getAppearanceFrequencies(fromNodeNormalizedText);
 
-						final Set<Integer> toNodeHashes = new HashSet<>();
+						final Set<String> existingNodes = new HashSet<>();
 						for (final PDGEdge edge : fromNode.getForwardEdges()) {
-							final Map<String, String> toNodeNormalizationMap = new HashMap<>();
 							final String toNomalizedText = Utility
-									.getNormalizedText(edge.toNode,
-											toNodeNormalizationMap);
-							toNodeHashes.add(toNomalizedText.hashCode());
+									.getNormalizedText(edge.toNode);
+							existingNodes.add(toNomalizedText);
 						}
 
-						for (final AppearanceProbability appearanceProbability : appearanceProbabilities) {
-							if (toNodeHashes
-									.contains(appearanceProbability.hash)) {
-								continue;
+						for(int i = 0 ; i < appearanceProbabilities.size() ; i++){
+							final AppearanceProbability p = appearanceProbabilities.get(i);
+							if(existingNodes.contains(p)){
+								appearanceProbabilities.remove(i);
 							}
-							List<AppearanceProbability> list = allAppearanceProbabilities
-									.get(appearanceProbability.hash);
-							if (null == list) {
-								list = new ArrayList<>();
-								allAppearanceProbabilities.put(
-										appearanceProbability.hash, list);
-							}
-							list.add(appearanceProbability);
 						}
-
+						
+						allAppearanceProbabilities.add(appearanceProbabilities);
 					}
+					
 					final List<List<AppearanceProbability>> freqList = new ArrayList<List<AppearanceProbability>>();
-					freqList.addAll(allAppearanceProbabilities.values());
+					freqList.addAll(allAppearanceProbabilities);
 					Collections.sort(freqList,
 							new Comparator<List<AppearanceProbability>>() {
 								@Override
@@ -280,7 +270,7 @@ public class Activator extends AbstractUIPlugin {
 			confidence += probability.confidence;
 		}
 		final StringBuilder text = new StringBuilder(
-				appearanceProbabilities.get(0).text);
+				appearanceProbabilities.get(0).dependence.toNodeNormalizationText);
 		for (final Entry<String, String> entry : normalizationMap.entrySet()) {
 			final String originalName = entry.getKey();
 			final String normalizedName = entry.getValue();

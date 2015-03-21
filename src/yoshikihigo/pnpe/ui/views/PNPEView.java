@@ -5,9 +5,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -46,6 +48,7 @@ import yoshikihigo.tinypdg.pdg.node.PDGNodeFactory;
 import yoshikihigo.tinypdg.pe.MethodInfo;
 import yoshikihigo.tinypdg.prelement.data.AppearanceProbability;
 import yoshikihigo.tinypdg.prelement.data.DEPENDENCE_TYPE;
+import yoshikihigo.tinypdg.prelement.data.Dependence;
 import yoshikihigo.tinypdg.prelement.db.DAO;
 
 /**
@@ -99,37 +102,35 @@ public class PNPEView extends ViewPart {
 				}
 
 				this.print("STEP2: distilling dependencies from the Java source files ...");
-				final ConcurrentMap<Integer, String> textHashMap = new ConcurrentHashMap<>();
-				final ConcurrentMap<Integer, AtomicInteger> fromNodeAppearanceNumbers = new ConcurrentHashMap<Integer, AtomicInteger>();
-				final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> appearanceProbabilitiesForControl = new ConcurrentHashMap<>();
-				final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> appearanceProbabilitiesForData = new ConcurrentHashMap<>();
-				final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> appearanceProbabilitiesForExecution = new ConcurrentHashMap<>();
-				this.extractDependencies(files, textHashMap,
-						fromNodeAppearanceNumbers,
-						appearanceProbabilitiesForControl,
-						appearanceProbabilitiesForData,
-						appearanceProbabilitiesForExecution);
+				final ConcurrentMap<String, AtomicInteger> fromNodeAppearanceNumbers = new ConcurrentHashMap<>();
+				final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbersForControl = new ConcurrentHashMap<>();
+				final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbersForData = new ConcurrentHashMap<>();
+				final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbersForExecution = new ConcurrentHashMap<>();
+				this.extractDependencies(files, fromNodeAppearanceNumbers,
+						dependenceAppearanceNumbersForControl,
+						dependenceAppearanceNumbersForData,
+						dependenceAppearanceNumbersForExecution);
 
 				if ((null == text) || text.isDisposed()) {
 					return;
 				}
 
 				this.print("STEP3: registering the dependencies to SQL database ...");
-				final ConcurrentMap<Integer, List<AppearanceProbability>> frequenciesForControlDependence = new ConcurrentHashMap<Integer, List<AppearanceProbability>>();
-				final ConcurrentMap<Integer, List<AppearanceProbability>> frequenciesForDataDependence = new ConcurrentHashMap<Integer, List<AppearanceProbability>>();
-				final ConcurrentMap<Integer, List<AppearanceProbability>> frequenciesForExecutionDependence = new ConcurrentHashMap<Integer, List<AppearanceProbability>>();
+				final ConcurrentMap<String, List<AppearanceProbability>> appearanceProbabilitiesForControl = new ConcurrentHashMap<>();
+				final ConcurrentMap<String, List<AppearanceProbability>> appearanceProbabilitiesForData = new ConcurrentHashMap<>();
+				final ConcurrentMap<String, List<AppearanceProbability>> appearanceProbabilitiesForExecution = new ConcurrentHashMap<>();
 				calculateAppearanceProbabilities(DEPENDENCE_TYPE.CONTROL,
 						fromNodeAppearanceNumbers,
-						appearanceProbabilitiesForControl, textHashMap,
-						frequenciesForControlDependence);
+						dependenceAppearanceNumbersForControl,
+						appearanceProbabilitiesForControl);
 				calculateAppearanceProbabilities(DEPENDENCE_TYPE.DATA,
 						fromNodeAppearanceNumbers,
-						appearanceProbabilitiesForData, textHashMap,
-						frequenciesForDataDependence);
+						dependenceAppearanceNumbersForData,
+						appearanceProbabilitiesForData);
 				calculateAppearanceProbabilities(DEPENDENCE_TYPE.EXECUTION,
 						fromNodeAppearanceNumbers,
-						appearanceProbabilitiesForExecution, textHashMap,
-						frequenciesForExecutionDependence);
+						dependenceAppearanceNumbersForExecution,
+						appearanceProbabilitiesForExecution);
 
 				if ((null == text) || text.isDisposed()) {
 					return;
@@ -142,13 +143,12 @@ public class PNPEView extends ViewPart {
 					}
 				}
 				final DAO dao = new DAO("PNPe.database");
-				registerTextsToDatabase(dao, textHashMap);
-				registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.CONTROL,
-						frequenciesForControlDependence);
-				registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.DATA,
-						frequenciesForDataDependence);
-				registerFrequenciesToDatabase(dao, DEPENDENCE_TYPE.EXECUTION,
-						frequenciesForExecutionDependence);
+				registerApperanceProbabilitiesToDatabase(dao,
+						appearanceProbabilitiesForControl);
+				registerApperanceProbabilitiesToDatabase(dao,
+						appearanceProbabilitiesForData);
+				registerApperanceProbabilitiesToDatabase(dao,
+						appearanceProbabilitiesForExecution);
 				dao.close();
 
 				if ((null == text) || text.isDisposed()) {
@@ -189,11 +189,10 @@ public class PNPEView extends ViewPart {
 
 			private void extractDependencies(
 					final List<ICompilationUnit> files,
-					final ConcurrentMap<Integer, String> textHashMap,
-					final ConcurrentMap<Integer, AtomicInteger> fromNodeAppearanceNumbers,
-					final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> appearanceProbabilitiesForControl,
-					final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> appearanceProbabilitiesForData,
-					final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> appearanceProbabilitiesForExecution) {
+					final ConcurrentMap<String, AtomicInteger> fromNodeAppearanceNumbers,
+					final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbersForControl,
+					final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbersForData,
+					final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbersForExecution) {
 
 				final CFGNodeFactory cfgNodeFactory = new CFGNodeFactory();
 				final PDGNodeFactory pdgNodeFactory = new PDGNodeFactory();
@@ -219,115 +218,131 @@ public class PNPEView extends ViewPart {
 						final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
 						for (final PDGNode<?> fromNode : nodes) {
 
-							// generate a hash value from fromNode
-							final Map<String, String> fromNodeNormalizationMap = new HashMap<>();
-							final String fromNodeNormalizedText = Utility
-									.getNormalizedText(fromNode,
-											fromNodeNormalizationMap);
-							final int fromNodeHash = fromNodeNormalizedText
-									.hashCode();
-
-							// make mapping between hash value and
-							// normalized text
-							if (!textHashMap.containsKey(fromNodeHash)) {
-								textHashMap.put(fromNodeHash,
-										fromNodeNormalizedText);
-							}
-
 							if (fromNode.getForwardEdges().isEmpty()) {
 								continue;
 							}
 
-							AtomicInteger appearanceNumber = fromNodeAppearanceNumbers
-									.get(fromNodeHash);
-							if (null == appearanceNumber) {
-								appearanceNumber = new AtomicInteger(0);
-								fromNodeAppearanceNumbers.put(fromNodeHash,
-										appearanceNumber);
+							final Map<String, String> absoluteNormalizationMap = new HashMap<>();
+							final String fromNodeAbsoluteNormalizationText = Utility
+									.getNormalizedText(fromNode,
+											absoluteNormalizationMap);
+
+							AtomicInteger fromNodeAppearanceNumber = fromNodeAppearanceNumbers
+									.get(fromNodeAbsoluteNormalizationText);
+							if (null == fromNodeAppearanceNumber) {
+								fromNodeAppearanceNumber = new AtomicInteger(0);
+								fromNodeAppearanceNumbers.put(
+										fromNodeAbsoluteNormalizationText,
+										fromNodeAppearanceNumber);
 							}
-							appearanceNumber.incrementAndGet();
+							fromNodeAppearanceNumber.incrementAndGet();
 
-							final SortedSet<PDGEdge> edges = fromNode
+							final SortedSet<PDGEdge> forwardEdges = fromNode
 									.getForwardEdges();
-							for (final PDGEdge edge : edges) {
+							for (final PDGEdge edge : forwardEdges) {
 
-								// generate a hash value from toNode
-								final Map<String, String> toNodeNormalizationMap = new HashMap<>(
-										fromNodeNormalizationMap);
-								final String toNodeNormalizedText = Utility
-										.getNormalizedText(edge.toNode,
-												toNodeNormalizationMap);
-								final int toNodeHash = toNodeNormalizedText
-										.hashCode();
+								final PDGNode<?> toNode = edge.toNode;
 
-								// normalized text
-								if (!textHashMap.containsKey(toNodeHash)) {
-									textHashMap.put(toNodeHash,
-											toNodeNormalizedText);
-								}
+								final Map<String, String> relativeNormalizationMap = new HashMap<>();
+								final String toNodeRelativeNormalizationText = Utility
+										.getNormalizedText(toNode,
+												relativeNormalizationMap);
+								final String fromNodeRelativeNormalizationText = Utility
+										.getNormalizedText(fromNode,
+												relativeNormalizationMap);
+
+								final String absoluteRelativeMap = makeMap(
+										absoluteNormalizationMap,
+										relativeNormalizationMap);
+
+								final Dependence dependence = new Dependence(
+										fromNodeAbsoluteNormalizationText,
+										fromNodeRelativeNormalizationText,
+										toNodeRelativeNormalizationText,
+										absoluteRelativeMap);
 
 								if (edge instanceof PDGControlDependenceEdge) {
-									addToNodeHash(fromNodeHash, toNodeHash,
-											appearanceProbabilitiesForControl);
+									addDependence(dependence,
+											dependenceAppearanceNumbersForControl);
 								} else if (edge instanceof PDGDataDependenceEdge) {
-									addToNodeHash(fromNodeHash, toNodeHash,
-											appearanceProbabilitiesForData);
+									addDependence(dependence,
+											dependenceAppearanceNumbersForData);
 								} else if (edge instanceof PDGExecutionDependenceEdge) {
-									addToNodeHash(fromNodeHash, toNodeHash,
-											appearanceProbabilitiesForExecution);
+									addDependence(dependence,
+											dependenceAppearanceNumbersForExecution);
 								}
+
 							}
 						}
 					}
 				}
 			}
 
-			private void addToNodeHash(
-					final int fromNodeHash,
-					final int toNodeHash,
-					final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> toNodeAppearanceNumber) {
-
-				ConcurrentMap<Integer, AtomicInteger> toNodeHashes = toNodeAppearanceNumber
-						.get(fromNodeHash);
-				if (null == toNodeHashes) {
-					toNodeHashes = new ConcurrentHashMap<Integer, AtomicInteger>();
-					toNodeAppearanceNumber.put(fromNodeHash, toNodeHashes);
-				}
-				AtomicInteger appearanceNumber = toNodeHashes.get(toNodeHash);
+			private void addDependence(
+					final Dependence dependence,
+					final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbers) {
+				AtomicInteger appearanceNumber = dependenceAppearanceNumbers
+						.get(dependence);
 				if (null == appearanceNumber) {
 					appearanceNumber = new AtomicInteger(0);
-					toNodeHashes.put(toNodeHash, appearanceNumber);
+					dependenceAppearanceNumbers.putIfAbsent(dependence,
+							appearanceNumber);
 				}
 				appearanceNumber.incrementAndGet();
 			}
 
+			private String makeMap(
+					final Map<String, String> absoluteNormalizationMap,
+					final Map<String, String> relativeNormalizationMap) {
+				final StringBuffer buffer = new StringBuffer();
+				for (final Entry<String, String> absoluteEntry : absoluteNormalizationMap
+						.entrySet()) {
+					final String originalName = absoluteEntry.getKey();
+					final String absoluteNormalizedName = absoluteEntry
+							.getValue();
+					final String relativeNormalizedName = relativeNormalizationMap
+							.get(originalName);
+					buffer.append(absoluteNormalizedName);
+					buffer.append(":");
+					buffer.append(relativeNormalizedName);
+					buffer.append(",");
+				}
+				return buffer.toString();
+			}
+
 			private void calculateAppearanceProbabilities(
 					final DEPENDENCE_TYPE type,
-					final ConcurrentMap<Integer, AtomicInteger> fromNodeAppearanceNumbers,
-					final ConcurrentMap<Integer, ConcurrentMap<Integer, AtomicInteger>> fromToNodeAppearanceNumbers,
-					final ConcurrentMap<Integer, String> textHashMap,
-					final ConcurrentMap<Integer, List<AppearanceProbability>> appearanceProbabilities) {
+					final ConcurrentMap<String, AtomicInteger> fromNodeAppearanceNumbers,
+					final ConcurrentMap<Dependence, AtomicInteger> dependenceAppearanceNumbers,
+					final ConcurrentMap<String, List<AppearanceProbability>> appearanceProbabilities) {
 
-				for (final Entry<Integer, ConcurrentMap<Integer, AtomicInteger>> entry : fromToNodeAppearanceNumbers
+				for (final Entry<Dependence, AtomicInteger> entry : dependenceAppearanceNumbers
 						.entrySet()) {
-					final int fromNodeHash = entry.getKey();
-					final int totalTime = fromNodeAppearanceNumbers.get(
-							fromNodeHash).get();
-					final List<AppearanceProbability> frequencies = new ArrayList<AppearanceProbability>();
-					final ConcurrentMap<Integer, AtomicInteger> toNodeFrequencies = entry
-							.getValue();
-					for (final Entry<Integer, AtomicInteger> entry2 : toNodeFrequencies
-							.entrySet()) {
-						final int toNodeHash = entry2.getKey();
-						final int time = entry2.getValue().get();
-						final String normalizedText = textHashMap
-								.get(toNodeHash);
-						final AppearanceProbability frequency = new AppearanceProbability(
-								type, (float) time / (float) totalTime, time,
-								toNodeHash, normalizedText);
-						frequencies.add(frequency);
+					final Dependence dependence = entry.getKey();
+					final int appearanceNumber = entry.getValue().get();
+
+					final String fromNodeAbsoluteNormalizationText = dependence.fromNodeAbsoluteNormalizationText;
+					final int fromNodeAppearanceNumber = fromNodeAppearanceNumbers
+							.get(fromNodeAbsoluteNormalizationText).get();
+
+					final AppearanceProbability probability = new AppearanceProbability(
+							type, dependence, (float) appearanceNumber
+									/ (float) fromNodeAppearanceNumber,
+							appearanceNumber);
+					List<AppearanceProbability> probabilities = appearanceProbabilities
+							.get(fromNodeAbsoluteNormalizationText);
+					if (null == probabilities) {
+						probabilities = new ArrayList<>();
+						appearanceProbabilities.put(
+								fromNodeAbsoluteNormalizationText,
+								probabilities);
 					}
-					Collections.sort(frequencies,
+					probabilities.add(probability);
+				}
+
+				for (final List<AppearanceProbability> probabilities : appearanceProbabilities
+						.values()) {
+					Collections.sort(probabilities,
 							new Comparator<AppearanceProbability>() {
 								@Override
 								public int compare(
@@ -337,12 +352,15 @@ public class PNPEView extends ViewPart {
 										return -1;
 									} else if (f1.confidence < f2.confidence) {
 										return 1;
+									} else if (f1.support > f2.support) {
+										return -1;
+									} else if (f1.support < f2.support) {
+										return 1;
 									} else {
 										return 0;
 									}
 								}
 							});
-					appearanceProbabilities.put(fromNodeHash, frequencies);
 				}
 			}
 
@@ -355,6 +373,18 @@ public class PNPEView extends ViewPart {
 					}
 				});
 			}
+
+			private void registerApperanceProbabilitiesToDatabase(
+					final DAO dao,
+					final ConcurrentMap<String, List<AppearanceProbability>> allProbabilities) {
+
+				for (final List<AppearanceProbability> probabilities : allProbabilities
+						.values()) {
+					for (final AppearanceProbability probability : probabilities) {
+						dao.addToProbabilities(probability);
+					}
+				}
+			}
 		}.start();
 	}
 
@@ -364,30 +394,4 @@ public class PNPEView extends ViewPart {
 	public void setFocus() {
 		text.setFocus();
 	}
-
-	private static void registerTextsToDatabase(final DAO dao,
-			final ConcurrentMap<Integer, String> texts) {
-
-		for (final Entry<Integer, String> entry : texts.entrySet()) {
-			final int hash = entry.getKey();
-			final String text = entry.getValue();
-			dao.addToTexts(hash, text);
-		}
-	}
-
-	private static void registerFrequenciesToDatabase(
-			final DAO dao,
-			DEPENDENCE_TYPE type,
-			final ConcurrentMap<Integer, List<AppearanceProbability>> allFrequencies) {
-
-		for (final Entry<Integer, List<AppearanceProbability>> entry : allFrequencies
-				.entrySet()) {
-
-			final int fromhash = entry.getKey();
-			for (final AppearanceProbability frequency : entry.getValue()) {
-				dao.addToProbabilities(type, fromhash, frequency);
-			}
-		}
-	}
-
 }
