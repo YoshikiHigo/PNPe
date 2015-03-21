@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -182,6 +183,7 @@ public class Activator extends AbstractUIPlugin {
 							}
 							list.add(appearanceProbability);
 						}
+
 					}
 					final List<List<AppearanceProbability>> freqList = new ArrayList<List<AppearanceProbability>>();
 					freqList.addAll(allAppearanceProbabilities.values());
@@ -219,7 +221,8 @@ public class Activator extends AbstractUIPlugin {
 							});
 
 					for (final List<AppearanceProbability> freq : freqList) {
-						final Candidate c = makeCandidate(freq);
+						final Candidate c = makeCandidate(freq,
+								new HashMap<String, String>());
 						CandidateList.getInstance().add(c);
 					}
 
@@ -268,13 +271,25 @@ public class Activator extends AbstractUIPlugin {
 	}
 
 	private Candidate makeCandidate(
-			final List<AppearanceProbability> frequencies) {
+			final List<AppearanceProbability> appearanceProbabilities,
+			final Map<String, String> normalizationMap) {
 		int support = 0;
-		float probability = 0;
-		for (final AppearanceProbability f : frequencies) {
-			support += f.support;
-			probability += f.confidence;
+		float confidence = 0;
+		for (final AppearanceProbability probability : appearanceProbabilities) {
+			support += probability.support;
+			confidence += probability.confidence;
 		}
-		return new Candidate(frequencies.get(0).text, support, probability);
+		final StringBuilder text = new StringBuilder(
+				appearanceProbabilities.get(0).text);
+		for (final Entry<String, String> entry : normalizationMap.entrySet()) {
+			final String originalName = entry.getKey();
+			final String normalizedName = entry.getValue();
+			int index = 0;
+			while (0 < (index = text.indexOf(normalizedName))) {
+				text.replace(index, index + normalizedName.length(),
+						originalName);
+			}
+		}
+		return new Candidate(text.toString(), support, confidence);
 	}
 }

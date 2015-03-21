@@ -220,10 +220,10 @@ public class PNPEView extends ViewPart {
 						for (final PDGNode<?> fromNode : nodes) {
 
 							// generate a hash value from fromNode
-							final Map<String, String> fromNodenormalizationMap = new HashMap<>();
+							final Map<String, String> fromNodeNormalizationMap = new HashMap<>();
 							final String fromNodeNormalizedText = Utility
 									.getNormalizedText(fromNode,
-											fromNodenormalizationMap);
+											fromNodeNormalizationMap);
 							final int fromNodeHash = fromNodeNormalizedText
 									.hashCode();
 
@@ -252,7 +252,8 @@ public class PNPEView extends ViewPart {
 							for (final PDGEdge edge : edges) {
 
 								// generate a hash value from toNode
-								final Map<String, String> toNodeNormalizationMap = new HashMap<>();
+								final Map<String, String> toNodeNormalizationMap = new HashMap<>(
+										fromNodeNormalizationMap);
 								final String toNodeNormalizedText = Utility
 										.getNormalizedText(edge.toNode,
 												toNodeNormalizationMap);
