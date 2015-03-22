@@ -168,9 +168,9 @@ public class DAO {
 
 			final Statement statement = this.connector.createStatement();
 			statement
-					.executeUpdate("create index index_fromNodeAbsoluteText_probabilities on probabilities(fromAbsoluteText)");
+					.executeUpdate("create index if not exists index_fromNodeAbsoluteText_probabilities on probabilities(fromAbsoluteText)");
 			statement
-					.executeUpdate("create index index_type_fromNodeAbsoluteText_probabilities on probabilities(type,fromAbsoluteText)");
+					.executeUpdate("create index if not exists index_type_fromNodeAbsoluteText_probabilities on probabilities(type,fromAbsoluteText)");
 
 			this.insertToProbabilities.close();
 			this.connector.close();

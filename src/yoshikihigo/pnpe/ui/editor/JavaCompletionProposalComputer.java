@@ -10,8 +10,8 @@ import org.eclipse.jface.text.contentassist.CompletionProposal;
 import org.eclipse.jface.text.contentassist.ICompletionProposal;
 import org.eclipse.jface.text.contentassist.IContextInformation;
 
-import yoshikihigo.pnpe.ui.Candidate;
-import yoshikihigo.pnpe.ui.CandidateList;
+import yoshikihigo.tinypdg.prelement.data.Candidate;
+import yoshikihigo.tinypdg.prelement.data.CandidateList;
 
 public class JavaCompletionProposalComputer implements
 		IJavaCompletionProposalComputer {

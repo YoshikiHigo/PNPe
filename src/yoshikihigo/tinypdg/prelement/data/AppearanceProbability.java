@@ -1,6 +1,6 @@
 package yoshikihigo.tinypdg.prelement.data;
 
-public class AppearanceProbability {
+public class AppearanceProbability implements Comparable<AppearanceProbability>{
 
 	public final DEPENDENCE_TYPE type;
 	public final Dependence dependence;
@@ -14,4 +14,19 @@ public class AppearanceProbability {
 		this.confidence = confidence;
 		this.support = support;
 	}
+	
+		@Override
+		public int compareTo(final AppearanceProbability o) {
+			if (this.support > o.support) {
+				return -1;
+			} else if (this.support < o.support) {
+				return 1;
+			} else if (this.confidence > o.confidence) {
+				return -1;
+			} else if (this.confidence < o.confidence) {
+				return 1;
+			} else {
+				return 0;
+			}
+		}
 }

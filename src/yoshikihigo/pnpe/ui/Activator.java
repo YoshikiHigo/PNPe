@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.StringTokenizer;
 
 import org.eclipse.jdt.core.ElementChangedEvent;
 import org.eclipse.jdt.core.IElementChangedListener;
@@ -37,6 +38,8 @@ import yoshikihigo.tinypdg.pdg.node.PDGNode;
 import yoshikihigo.tinypdg.pdg.node.PDGNodeFactory;
 import yoshikihigo.tinypdg.pe.MethodInfo;
 import yoshikihigo.tinypdg.prelement.data.AppearanceProbability;
+import yoshikihigo.tinypdg.prelement.data.Candidate;
+import yoshikihigo.tinypdg.prelement.data.CandidateList;
 import yoshikihigo.tinypdg.prelement.db.DAO;
 
 /**
@@ -116,16 +119,92 @@ public class Activator extends AbstractUIPlugin {
 			@Override
 			public void run() {
 
-				IJavaElementDelta delta = event.getDelta();
-				System.out.println(delta.toString());
-				// this.traverseAndPrint(delta);
-
 				final long startTime = System.nanoTime();
 
-				final int caretPosition = Activator.this.getCaretPosition();
+				final MethodInfo targetMethod = this.getTargetMethod();
+
+				if (null != targetMethod) {
+
+					final DAO dao = new DAO("PNPe.database");
+					final PDG pdg = this.buildPDG(targetMethod);
+					final Map<String, List<AppearanceProbability>> allAppearanceProbabilities = new HashMap<>();
+					final Map<AppearanceProbability, Map<String, String>> probabilityNormalizationMap = new HashMap<>();
+					final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
+					for (final PDGNode<?> fromNode : nodes) {
+
+						final Map<String, String> fromNodeNormalizationMap = new HashMap<>();
+						final String fromNodeNormalizedText = Utility
+								.getNormalizedText(fromNode,
+										fromNodeNormalizationMap);
+						final List<AppearanceProbability> appearanceProbabilities = dao
+								.getAppearanceFrequencies(fromNodeNormalizedText);
+
+						final Set<String> existingNodes = new HashSet<>();
+						for (final PDGEdge edge : fromNode.getForwardEdges()) {
+							final String toNomalizedText = Utility
+									.getNormalizedText(edge.toNode);
+							existingNodes.add(toNomalizedText);
+						}
+
+						for (final AppearanceProbability probability : appearanceProbabilities) {
+
+							if (existingNodes.contains(probability)) {
+								continue;
+							}
+
+							final String toNodeText = probability.dependence.toNodeNormalizationText;
+							List<AppearanceProbability> probabilities = allAppearanceProbabilities
+									.get(toNodeText);
+							if (null == probabilities) {
+								probabilities = new ArrayList<>();
+								allAppearanceProbabilities.put(toNodeText,
+										probabilities);
+							}
+							probabilities.add(probability);
+							probabilityNormalizationMap.put(probability,
+									fromNodeNormalizationMap);
+						}
+					}
+
+					for (final List<AppearanceProbability> probabilities : allAppearanceProbabilities
+							.values()) {
+						Collections.sort(probabilities);
+					}
+					final List<Candidate> candidates = new ArrayList<>();
+					for (final Entry<String, List<AppearanceProbability>> entry : allAppearanceProbabilities
+							.entrySet()) {
+						final String toNodeNormalizedText = entry.getKey();
+						final List<AppearanceProbability> probabilities = entry
+								.getValue();
+						final Candidate candidate = makeCandidate(
+								toNodeNormalizedText, probabilities,
+								probabilityNormalizationMap);
+						candidates.add(candidate);
+					}
+					Collections.sort(candidates);
+					CandidateList.getInstance().addAll(candidates);
+
+					System.out.println("there are " + candidates.size()
+							+ " candidates.");
+
+					dao.close();
+				}
+
+				final long endTime = System.nanoTime();
+
+				System.out.println(Long.toString((endTime - startTime) / 1000l));
+			}
+
+			private MethodInfo getTargetMethod() {
+
+				IJavaElementDelta delta = event.getDelta();
+				// System.out.println(delta.toString());
+				// this.traverseAndPrint(delta);
+
+				final int caretPosition = this.getCaretPosition();
 				if (caretPosition < 0) {
 					System.out.println("caret position is negative.");
-					return;
+					return null;
 				}
 
 				final CompilationUnit compilationUnit = delta
@@ -145,141 +224,95 @@ public class Activator extends AbstractUIPlugin {
 					}
 				}
 
-				final DAO dao = new DAO("PNPe.database");
+				return targetMethod;
+			}
 
-				if (null != targetMethod) {
-					final PDG pdg = Activator.this.buildPDG(targetMethod);					
-					final List<List<AppearanceProbability>> allAppearanceProbabilities = new ArrayList<>();
-					final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
-					for (final PDGNode<?> fromNode : nodes) {
+			private PDG buildPDG(final MethodInfo method) {
+				final CFGNodeFactory cfgNodeFactory = new CFGNodeFactory();
+				final PDGNodeFactory pdgNodeFactory = new PDGNodeFactory();
+				final PDG pdg = new PDG(method, pdgNodeFactory, cfgNodeFactory,
+						true, true, false, Integer.MAX_VALUE,
+						Integer.MAX_VALUE, Integer.MAX_VALUE);
+				pdg.build();
+				return pdg;
+			}
 
-						final String fromNodeNormalizedText = Utility
-								.getNormalizedText(fromNode);
-						final List<AppearanceProbability> appearanceProbabilities = dao
-								.getAppearanceFrequencies(fromNodeNormalizedText);
-
-						final Set<String> existingNodes = new HashSet<>();
-						for (final PDGEdge edge : fromNode.getForwardEdges()) {
-							final String toNomalizedText = Utility
-									.getNormalizedText(edge.toNode);
-							existingNodes.add(toNomalizedText);
+			private int getCaretPosition() {
+				int caretPosition = -1;
+				final IWorkbench workbench = Activator.getDefault()
+						.getWorkbench();
+				final IWorkbenchWindow window = workbench
+						.getActiveWorkbenchWindow();
+				if (null != window) {
+					final IWorkbenchPage page = window.getActivePage();
+					IEditorPart editor = page.getActiveEditor();
+					if (editor instanceof ITextEditor) {
+						ISelectionProvider selectionProvider = ((ITextEditor) editor)
+								.getSelectionProvider();
+						ISelection selection = selectionProvider.getSelection();
+						if (selection instanceof ITextSelection) {
+							ITextSelection textSelection = (ITextSelection) selection;
+							caretPosition = textSelection.getOffset();
 						}
-
-						for(int i = 0 ; i < appearanceProbabilities.size() ; i++){
-							final AppearanceProbability p = appearanceProbabilities.get(i);
-							if(existingNodes.contains(p)){
-								appearanceProbabilities.remove(i);
-							}
-						}
-						
-						allAppearanceProbabilities.add(appearanceProbabilities);
 					}
-					
-					final List<List<AppearanceProbability>> freqList = new ArrayList<List<AppearanceProbability>>();
-					freqList.addAll(allAppearanceProbabilities);
-					Collections.sort(freqList,
-							new Comparator<List<AppearanceProbability>>() {
-								@Override
-								public int compare(
-										final List<AppearanceProbability> o1,
-										final List<AppearanceProbability> o2) {
-									int support1 = 0;
-									int support2 = 0;
-									float probability1 = 0;
-									float probability2 = 0;
-									for (final AppearanceProbability f : o1) {
-										support1 += f.support;
-										probability1 += f.confidence;
-									}
-									for (final AppearanceProbability f : o2) {
-										support2 += f.support;
-										probability2 += f.confidence;
-									}
-
-									if (support1 > support2) {
-										return -1;
-									} else if (support1 < support2) {
-										return 1;
-									} else if (probability1 > probability2) {
-										return -1;
-									} else if (probability1 < probability2) {
-										return 1;
-									} else {
-										return 0;
-									}
-								}
-							});
-
-					for (final List<AppearanceProbability> freq : freqList) {
-						final Candidate c = makeCandidate(freq,
-								new HashMap<String, String>());
-						CandidateList.getInstance().add(c);
-					}
-
-					System.out.println("there are " + freqList.size()
-							+ " candidates.");
 				}
 
-				dao.close();
+				return caretPosition;
+			}
 
-				final long endTime = System.nanoTime();
+			private Candidate makeCandidate(
+					final String normalizedText,
+					final List<AppearanceProbability> appearanceProbabilities,
+					final Map<AppearanceProbability, Map<String, String>> probabilityNormalizationMap) {
 
-				System.out.println(Long.toString((endTime - startTime) / 1000l));
+				final StringBuffer text = new StringBuffer(normalizedText);
+				int support = 0;
+				float confidence = 0f;
+
+				for (final AppearanceProbability p : appearanceProbabilities) {
+
+					support += p.support;
+					confidence += p.confidence;
+
+					final Map<String, String> absoluteRelativeNormalizationMap = getAbsoluteRelativeNormalizationMap(p.dependence.absoluteRelativeMap);
+					final Map<String, String> normalizationMap = probabilityNormalizationMap
+							.get(p);
+					for (final Entry<String, String> entry : normalizationMap
+							.entrySet()) {
+						final String originalName = entry.getKey();
+						final String absoluteNormalizedName = entry.getValue();
+						final String relativeNormalizedName = absoluteRelativeNormalizationMap
+								.get(absoluteNormalizedName);
+
+						int index = 0;
+						while (-1 < (index = text
+								.indexOf(relativeNormalizedName))) {
+							text.replace(index,
+									index + relativeNormalizedName.length(),
+									originalName);
+						}
+					}
+				}
+
+				return new Candidate(text.toString(), support, confidence);
+			}
+
+			private Map<String, String> getAbsoluteRelativeNormalizationMap(
+					final String text) {
+				final Map<String, String> map = new HashMap<>();
+				final StringTokenizer tokenizer = new StringTokenizer(text, ",");
+				while (tokenizer.hasMoreTokens()) {
+					final String token = tokenizer.nextToken();
+					final int delimiterIndex = token.indexOf(":");
+					final String absoluteNormalizedText = token.substring(0,
+							delimiterIndex);
+					final String relativeNormalizedText = token
+							.substring(delimiterIndex + 1);
+					map.put(absoluteNormalizedText, relativeNormalizedText);
+				}
+				return map;
 			}
 		});
 	}
 
-	private int getCaretPosition() {
-		int caretPosition = -1;
-		final IWorkbench workbench = Activator.getDefault().getWorkbench();
-		final IWorkbenchWindow window = workbench.getActiveWorkbenchWindow();
-		if (null != window) {
-			final IWorkbenchPage page = window.getActivePage();
-			IEditorPart editor = page.getActiveEditor();
-			if (editor instanceof ITextEditor) {
-				ISelectionProvider selectionProvider = ((ITextEditor) editor)
-						.getSelectionProvider();
-				ISelection selection = selectionProvider.getSelection();
-				if (selection instanceof ITextSelection) {
-					ITextSelection textSelection = (ITextSelection) selection;
-					caretPosition = textSelection.getOffset();
-				}
-			}
-		}
-
-		return caretPosition;
-	}
-
-	private PDG buildPDG(final MethodInfo method) {
-		final CFGNodeFactory cfgNodeFactory = new CFGNodeFactory();
-		final PDGNodeFactory pdgNodeFactory = new PDGNodeFactory();
-		final PDG pdg = new PDG(method, pdgNodeFactory, cfgNodeFactory, true,
-				true, false, Integer.MAX_VALUE, Integer.MAX_VALUE,
-				Integer.MAX_VALUE);
-		pdg.build();
-		return pdg;
-	}
-
-	private Candidate makeCandidate(
-			final List<AppearanceProbability> appearanceProbabilities,
-			final Map<String, String> normalizationMap) {
-		int support = 0;
-		float confidence = 0;
-		for (final AppearanceProbability probability : appearanceProbabilities) {
-			support += probability.support;
-			confidence += probability.confidence;
-		}
-		final StringBuilder text = new StringBuilder(
-				appearanceProbabilities.get(0).dependence.toNodeNormalizationText);
-		for (final Entry<String, String> entry : normalizationMap.entrySet()) {
-			final String originalName = entry.getKey();
-			final String normalizedName = entry.getValue();
-			int index = 0;
-			while (0 < (index = text.indexOf(normalizedName))) {
-				text.replace(index, index + normalizedName.length(),
-						originalName);
-			}
-		}
-		return new Candidate(text.toString(), support, confidence);
-	}
 }

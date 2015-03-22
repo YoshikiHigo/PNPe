@@ -5,11 +5,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -43,6 +41,7 @@ import yoshikihigo.tinypdg.pdg.edge.PDGControlDependenceEdge;
 import yoshikihigo.tinypdg.pdg.edge.PDGDataDependenceEdge;
 import yoshikihigo.tinypdg.pdg.edge.PDGEdge;
 import yoshikihigo.tinypdg.pdg.edge.PDGExecutionDependenceEdge;
+import yoshikihigo.tinypdg.pdg.node.PDGMethodEnterNode;
 import yoshikihigo.tinypdg.pdg.node.PDGNode;
 import yoshikihigo.tinypdg.pdg.node.PDGNodeFactory;
 import yoshikihigo.tinypdg.pe.MethodInfo;
@@ -218,6 +217,10 @@ public class PNPEView extends ViewPart {
 						final SortedSet<PDGNode<?>> nodes = pdg.getAllNodes();
 						for (final PDGNode<?> fromNode : nodes) {
 
+							if(fromNode instanceof PDGMethodEnterNode){
+								continue;
+							}
+							
 							if (fromNode.getForwardEdges().isEmpty()) {
 								continue;
 							}
